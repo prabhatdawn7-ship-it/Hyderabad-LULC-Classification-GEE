@@ -1,0 +1,549 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hyderabad LULC Explorer</title>
+<style>
+  :root{
+    --paper:#eef1f4;
+    --panel:#ffffff;
+    --ink:#1c2430;
+    --navy:#1f3a5f;
+    --steel:#5b7690;
+    --amber:#c9932f;
+    --line:#dde3ea;
+    --muted:#5c6673;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background:var(--paper);
+    color:var(--ink);
+    font-family:'IBM Plex Sans', Arial, sans-serif;
+    line-height:1.55;
+  }
+  h1,h2,h3{
+    font-family:'IBM Plex Serif', Georgia, serif;
+    color:var(--navy);
+    letter-spacing:-0.01em;
+    margin:0;
+  }
+  .mono{ font-family:'IBM Plex Mono','Courier New',monospace; }
+  a{ color:var(--navy); }
+
+  /* ---------- Top header ---------- */
+  header{
+    display:flex; align-items:center; justify-content:space-between;
+    gap:16px; padding:18px 28px;
+    background:var(--panel);
+    border-bottom:1px solid var(--line);
+  }
+  .brand{ display:flex; align-items:center; gap:14px; }
+  .brand-icon{
+    width:44px; height:44px; border-radius:10px;
+    background:var(--navy);
+    display:flex; align-items:center; justify-content:center;
+    color:#fff; font-size:20px; flex-shrink:0;
+  }
+  .brand .eyebrow{
+    font-family:'IBM Plex Mono', monospace; font-size:0.72rem;
+    letter-spacing:0.14em; text-transform:uppercase; color:var(--amber);
+    margin-bottom:2px;
+  }
+  .brand h1{ font-size:1.4rem; }
+  .open-btn{
+    display:inline-flex; align-items:center; gap:6px;
+    padding:10px 18px; border:1px solid var(--navy); border-radius:24px;
+    color:var(--navy); text-decoration:none; font-size:0.9rem; font-weight:600;
+    white-space:nowrap;
+  }
+  .open-btn:hover{ background:var(--navy); color:#fff; }
+
+  /* ---------- Status strip ---------- */
+  .status-strip{
+    display:flex; align-items:center; justify-content:space-between;
+    gap:16px; flex-wrap:wrap; padding:12px 28px;
+    background:var(--panel); border-bottom:1px solid var(--line);
+    font-size:0.85rem; color:var(--muted);
+  }
+  .status-strip .live{ display:flex; align-items:center; gap:8px; font-weight:600; color:var(--ink); }
+  .dot{
+    width:9px; height:9px; border-radius:50%; background:#2e9e5b;
+    box-shadow:0 0 0 4px rgba(46,158,91,0.15);
+  }
+
+  /* ---------- Main two-column layout ---------- */
+  .layout{
+    display:grid;
+    grid-template-columns:1.4fr 1fr;
+    gap:20px;
+    padding:20px 28px 40px;
+    align-items:start;
+  }
+  @media (max-width:900px){
+    .layout{ grid-template-columns:1fr; }
+  }
+
+  .map-col{ position:sticky; top:20px; }
+  .map-card{
+    background:var(--panel); border:1px solid var(--line); border-radius:12px;
+    overflow:hidden;
+  }
+  .map-card .toolbar{
+    display:flex; align-items:center; gap:10px; padding:10px 14px;
+    border-bottom:1px solid var(--line); font-size:0.85rem; color:var(--muted);
+  }
+  .map-card iframe{
+    width:100%; height:640px; border:0; display:block; background:#f2f4f6;
+  }
+
+  /* ---------- Accordion (click-to-open subpages) ---------- */
+  .accordion{
+    background:var(--panel); border:1px solid var(--line); border-radius:12px;
+    overflow:hidden;
+  }
+  .acc-item{ border-bottom:1px solid var(--line); }
+  .acc-item:last-child{ border-bottom:none; }
+  .acc-header{
+    width:100%; display:flex; align-items:center; justify-content:space-between;
+    gap:10px; padding:16px 20px; background:none; border:none; cursor:pointer;
+    font-family:'IBM Plex Sans', Arial, sans-serif; font-size:0.95rem; font-weight:600;
+    color:var(--ink); text-align:left;
+  }
+  .acc-header .num{
+    font-family:'IBM Plex Mono', monospace; font-size:0.72rem; color:var(--amber);
+    margin-right:8px;
+  }
+  .acc-header .chevron{
+    color:var(--steel); transition:transform 0.25s ease; flex-shrink:0;
+  }
+  .acc-item.open .acc-header{ background:#eef3f7; color:var(--navy); }
+  .acc-item.open .chevron{ transform:rotate(180deg); }
+  .acc-body{
+    max-height:0; overflow:hidden; transition:max-height 0.3s ease;
+    padding:0 20px;
+  }
+  .acc-item.open .acc-body{ padding:0 20px 18px; }
+  .acc-body p{ margin:0 0 10px; color:#2e3540; font-size:0.9rem; white-space:pre-line; }
+  .acc-body .subtitle{ color:var(--muted); font-size:0.82rem; margin-bottom:10px; }
+
+  .info-grid{ display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:6px; }
+  .info-card{ background:#f4f6f9; border:1px solid var(--line); border-radius:8px; padding:10px 12px; }
+  .info-card .label{
+    font-family:'IBM Plex Mono', monospace; font-size:0.64rem; text-transform:uppercase;
+    letter-spacing:0.08em; color:var(--amber); margin-bottom:3px;
+  }
+  .info-card .value{ font-weight:600; font-size:0.85rem; }
+
+  .chip-row{ display:flex; flex-wrap:wrap; gap:8px; margin-top:6px; }
+  .chip{
+    background:#eef3f7; border:1px solid var(--line); border-radius:16px;
+    padding:6px 12px; font-size:0.78rem; font-weight:600; color:var(--navy);
+  }
+
+  ul.plain{ padding-left:18px; margin:6px 0 10px; }
+  ul.plain li{ margin-bottom:6px; color:#2e3540; font-size:0.88rem; }
+
+  .legend-row{ display:flex; flex-direction:column; gap:6px; margin-top:8px; }
+  .legend-swatch{ display:flex; align-items:center; gap:10px; font-size:0.85rem; }
+  .legend-swatch .box{ width:16px; height:16px; border-radius:3px; flex-shrink:0; }
+
+  /* ---------- Chart.js pie ---------- */
+  .chart-box{
+    width:100%;
+    max-width:350px;
+    margin:auto;
+  }
+  #pieChart{
+    width:100% !important;
+    height:300px !important;
+  }
+
+  table{ width:100%; border-collapse:collapse; font-size:0.8rem; margin-top:8px; }
+  th, td{ text-align:left; padding:6px 4px; border-bottom:1px solid var(--line); }
+  th{ font-family:'IBM Plex Mono', monospace; font-size:0.62rem; text-transform:uppercase; color:var(--navy); }
+  td.num{ font-family:'IBM Plex Mono', monospace; text-align:right; }
+  th.num{ text-align:right; }
+  tr.total td{ font-weight:700; border-bottom:none; }
+  td .swatch{
+    display:inline-block; width:10px; height:10px; border-radius:2px;
+    margin-right:7px; vertical-align:middle;
+  }
+
+  .contact-list{ list-style:none; padding:0; margin:6px 0 0; }
+  .contact-list li{ padding:6px 0; border-bottom:1px solid var(--line); font-size:0.85rem; }
+
+  footer{
+    text-align:center; padding:20px; font-size:0.82rem; color:var(--muted);
+    border-top:1px solid var(--line); background:var(--panel);
+  }
+</style>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+</head>
+<body>
+
+<header>
+  <div class="brand">
+    <div class="brand-icon">🏙️</div>
+    <div>
+      <div class="eyebrow">Interactive Geospatial Application</div>
+      <h1>Hyderabad LULC Explorer</h1>
+    </div>
+  </div>
+  <a class="open-btn" href="https://sodium-terrain-475105-q5.projects.earthengine.app/view/hyderabad-lulc-explorer" target="_blank" rel="noopener">
+    Open app in new tab ↗️
+  </a>
+</header>
+
+<div class="status-strip">
+  <div class="live"><span class="dot"></span> Live Google Earth Engine application</div>
+  <div>Toggle the True Color, LULC and Boundary layers, and check the legend and area stats on the right.</div>
+</div>
+
+<div class="layout">
+
+  <!-- LEFT: map, always visible -->
+  <div class="map-col">
+    <div class="map-card">
+      <div class="toolbar">🌐 Google Earth Engine App — Supervised LULC Classification of Hyderabad</div>
+      <iframe
+        src="https://sodium-terrain-475105-q5.projects.earthengine.app/view/hyderabad-lulc-explorer"
+        loading="lazy"
+        title="Hyderabad LULC Earth Engine App">
+      </iframe>
+    </div>
+  </div>
+
+  <!-- RIGHT: click-to-open subpage accordion, collapsed by default -->
+  <div class="accordion" id="accordion">
+
+    <div class="acc-item open">
+      <button class="acc-header" data-toggle>
+        <span><span class="num">01</span>Introduction</span>
+        <span class="chevron">▾</span>
+      </button>
+      <div class="acc-body">
+        <div class="subtitle">Supervised Land Use / Land Cover Classification of Hyderabad</div>
+        <p>This interactive Google Earth Engine application classifies Hyderabad's urban landscape
+          into five land-use/land-cover classes using a supervised Random Forest classifier trained
+          on Sentinel-2 surface reflectance and spectral indices. It lets a visitor compare the
+          Sentinel-2 imagery with the classified map, review classification accuracy, and inspect
+          the area occupied by each class.</p>
+      </div>
+    </div>
+
+    <div class="acc-item">
+      <button class="acc-header" data-toggle>
+        <span><span class="num">02</span>Study Area</span>
+        <span class="chevron">▾</span>
+      </button>
+      <div class="acc-body">
+        <div class="subtitle">Geographical Location of the Research Area</div>
+        <div class="info-grid">
+          <div class="info-card"><div class="label">Study Area</div><div class="value">Hyderabad</div></div>
+          <div class="info-card"><div class="label">Boundary Source</div><div class="value">Authoritative shapefile asset</div></div>
+          <div class="info-card"><div class="label">State</div><div class="value">Telangana</div></div>
+          <div class="info-card"><div class="label">Country</div><div class="value">India</div></div>
+          <div class="info-card"><div class="label">Character</div><div class="value">Dense urban core with peripheral parks and reservoirs</div></div>
+          <div class="info-card"><div class="label">Image Period</div><div class="value">Jan 2025 – Apr 2025</div></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="acc-item">
+      <button class="acc-header" data-toggle>
+        <span><span class="num">03</span>Datasets</span>
+        <span class="chevron">▾</span>
+      </button>
+      <div class="acc-body">
+        <div class="subtitle">Earth Observation and Reference Data</div>
+        <div class="chip-row">
+          <span class="chip">🛰️ Sentinel-2 MSI L2A Surface Reflectance</span>
+          <span class="chip">🗺️ Hyderabad boundary (authoritative shapefile)</span>
+          <span class="chip">🔍 Google Earth high-resolution imagery (reference sampling)</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="acc-item">
+      <button class="acc-header" data-toggle>
+        <span><span class="num">04</span>Methodology</span>
+        <span class="chevron">▾</span>
+      </button>
+      <div class="acc-body">
+        <div class="subtitle">Processing Workflow</div>
+        <ul class="plain">
+          <li>Cloud/cirrus masking of Sentinel-2 using the QA60 band; reflectance scaled by 0.0001.</li>
+          <li>Median composite (Jan–Apr 2025) clipped to the Hyderabad boundary, processed at 10 m.</li>
+          <li>Predictor bands: B2, B3, B4, B8, B11, B12, plus derived indices NDVI, NDBI and MNDWI.</li>
+          <li>Training samples digitised for five classes: water, built-up, vegetation, cropland, bare land.</li>
+          <li>Classifier: Random Forest (smileRandomForest), 200 trees, seed 42.</li>
+          <li>Post-classification smoothing with a focal-mode filter to reduce salt-and-pepper noise.</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="acc-item">
+      <button class="acc-header" data-toggle>
+        <span><span class="num">05</span>Classification Legend</span>
+        <span class="chevron">▾</span>
+      </button>
+      <div class="acc-body">
+        <div class="subtitle">Map Layers &amp; Mapped LULC Classes</div>
+        <div class="chip-row">
+          <span class="chip">🛰️ True Color (Sentinel-2)</span>
+          <span class="chip">🗂️ LULC Classification</span>
+          <span class="chip">🗺️ Study Area Boundary</span>
+        </div>
+        <div class="legend-row" style="margin-top:14px;">
+          <div class="legend-swatch"><span class="box" style="background:#0066CC;"></span>Water</div>
+          <div class="legend-swatch"><span class="box" style="background:#D73027;"></span>Built-up</div>
+          <div class="legend-swatch"><span class="box" style="background:#1A9850;"></span>Vegetation</div>
+          <div class="legend-swatch"><span class="box" style="background:#A6D96A;"></span>Cropland</div>
+          <div class="legend-swatch"><span class="box" style="background:#D9A45B;"></span>Bare Land</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="acc-item">
+      <button class="acc-header" data-toggle>
+        <span><span class="num">06</span>Area Statistics</span>
+        <span class="chevron">▾</span>
+      </button>
+      <div class="acc-body">
+        <div class="subtitle">Land Use / Land Cover Area (km²)</div>
+
+        <div class="chart-box">
+          <canvas id="pieChart"></canvas>
+        </div>
+
+        <table>
+          <tr>
+            <th>Class</th>
+            <th class="num">Area (km²)</th>
+            <th class="num">%</th>
+          </tr>
+          <tr>
+            <td><span class="swatch" style="background:#0066CC;"></span>Water</td>
+            <td class="num">5.248</td>
+            <td class="num">2.74</td>
+          </tr>
+          <tr>
+            <td><span class="swatch" style="background:#D73027;"></span>Built-up</td>
+            <td class="num">127.306</td>
+            <td class="num">66.50</td>
+          </tr>
+          <tr>
+            <td><span class="swatch" style="background:#1A9850;"></span>Vegetation</td>
+            <td class="num">3.085</td>
+            <td class="num">1.61</td>
+          </tr>
+          <tr>
+            <td><span class="swatch" style="background:#A6D96A;"></span>Cropland</td>
+            <td class="num">45.959</td>
+            <td class="num">24.01</td>
+          </tr>
+          <tr>
+            <td><span class="swatch" style="background:#D9A45B;"></span>Bare Land</td>
+            <td class="num">9.831</td>
+            <td class="num">5.14</td>
+          </tr>
+          <tr class="total">
+            <td>Total</td>
+            <td class="num">191.429</td>
+            <td class="num">100.00</td>
+          </tr>
+        </table>
+      </div>
+    </div>
+
+    <div class="acc-item">
+      <button class="acc-header" data-toggle>
+        <span><span class="num">07</span>Interpretation</span>
+        <span class="chevron">▾</span>
+      </button>
+      <div class="acc-body">
+        <div class="subtitle">Reading the Classified Map</div>
+        <p>Built-up land dominates the classified surface at roughly two-thirds of the study area,
+          which is consistent with Hyderabad's dense and largely continuous urban fabric. Cropland
+          forms the second largest class at about a quarter of the area and is concentrated towards
+          the periphery, beyond the built-up core.</p>
+        <p>Vegetation covers only a small fraction of the study area. Within a boundary this
+          urbanised, tree cover survives mainly in parks, institutional campuses and reservoir
+          margins, and much of it sits below the 10 m pixel size as street trees and small gardens
+          that are absorbed into the surrounding built-up signal. Water bodies account for a
+          similarly small share.</p>
+        <p>Some confusion remains between bare land and built-up, since dry soil and concrete
+          share broadly similar spectral characteristics in the visible and shortwave infrared.
+          Random Forest was chosen because it handles the high-dimensional band and index stack
+          well and is comparatively resistant to overfitting.</p>
+      </div>
+    </div>
+
+    <div class="acc-item">
+      <button class="acc-header" data-toggle>
+        <span><span class="num">08</span>Instructions</span>
+        <span class="chevron">▾</span>
+      </button>
+      <div class="acc-body">
+        <div class="subtitle">Using the App</div>
+        <ul class="plain">
+          <li>Turn map layers on/off using the Layers button.</li>
+          <li>Compare the True Color imagery with the LULC classification.</li>
+          <li>Toggle the Study Area Boundary layer to see the extent of Hyderabad.</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="acc-item">
+      <button class="acc-header" data-toggle>
+        <span><span class="num">09</span>About the Thesis</span>
+        <span class="chevron">▾</span>
+      </button>
+      <div class="acc-body">
+        <div class="subtitle">Research Context</div>
+        <p>This application has been developed as part of an M.Sc. Geoinformatics research
+          project to demonstrate a supervised land use/land cover classification workflow in
+          Google Earth Engine, using Sentinel-2 imagery and a Random Forest classifier over
+          Hyderabad.</p>
+      </div>
+    </div>
+
+    <div class="acc-item">
+      <button class="acc-header" data-toggle>
+        <span><span class="num">10</span>About the Author</span>
+        <span class="chevron">▾</span>
+      </button>
+      <div class="acc-body">
+        <div class="subtitle">Developer Information</div>
+        <div class="info-grid">
+          <div class="info-card"><div class="label">Author</div><div class="value">Shruti Dawn</div></div>
+          <div class="info-card"><div class="label">PRN</div><div class="value">2515120009</div></div>
+          <div class="info-card"><div class="label">Programme</div><div class="value">M.Sc. Geoinformatics</div></div>
+          <div class="info-card"><div class="label">Institute</div><div class="value">BVIEER, Pune</div></div>
+        </div>
+        <p style="margin-top:10px;">Bharati Vidyapeeth (Deemed to be University), Institute of
+          Environment Education and Research (BVIEER), Pune</p>
+      </div>
+    </div>
+
+    <div class="acc-item">
+      <button class="acc-header" data-toggle>
+        <span><span class="num">11</span>Contact</span>
+        <span class="chevron">▾</span>
+      </button>
+      <div class="acc-body">
+        <div class="subtitle">Get in Touch</div>
+        <ul class="contact-list">
+          <li>✉️ Email: <a href="mailto:prabhatdawn7@gmail.com">prabhatdawn7@gmail.com</a></li>
+          <li>💻 GitHub: <a href="https://github.com/prabhatdawn7-ship-it/hyderabad-lulc-explorer" target="_blank" rel="noopener">Hyderabad LULC Explorer ↗️</a></li>
+          <li>🌐 Google Earth Engine App: <a href="https://sodium-terrain-475105-q5.projects.earthengine.app/view/hyderabad-lulc-explorer" target="_blank" rel="noopener">Open Interactive Map ↗️</a></li>
+          <li>🏛️ Institute: <a href="https://www.bvieer.edu.in/" target="_blank" rel="noopener">Bharati Vidyapeeth (Deemed to be University), IEER, Pune ↗️</a></li>
+        </ul>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<footer>
+  Hyderabad LULC Explorer |
+  Developed by <strong>Shruti Dawn</strong> |
+  M.Sc. Geoinformatics, Semester III |
+  Bharati Vidyapeeth (Deemed to be University),
+  Institute of Environment Education and Research (BVIEER), Pune |
+  Powered by Google Earth Engine
+</footer>
+
+<script>
+  /* ---------- Pie chart ---------- */
+  var pieChart = null;
+
+  function initPieChart(){
+    if (pieChart) return;
+    var canvas = document.getElementById('pieChart');
+    if (!canvas || typeof Chart === 'undefined') return;
+
+    pieChart = new Chart(canvas, {
+      type: 'pie',
+      data: {
+        labels: ['Water', 'Built-up', 'Vegetation', 'Cropland', 'Bare Land'],
+        datasets: [{
+          data: [5.248, 127.306, 3.085, 45.959, 9.831],
+          backgroundColor: ['#0066CC', '#D73027', '#1A9850', '#A6D96A', '#D9A45B'],
+          borderColor: '#fff',
+          borderWidth: 2
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { position: 'bottom' },
+          title: { display: true, text: 'Land Use / Land Cover Area Statistics' },
+          tooltip: {
+            callbacks: {
+              label: function(context){
+                var total = context.dataset.data.reduce(function(a, b){ return a + b; }, 0);
+                var pct = (context.parsed / total * 100).toFixed(2);
+                return context.label + ': ' + context.parsed.toFixed(3) + ' km² (' + pct + '%)';
+              }
+            }
+          }
+        }
+      }
+    });
+  }
+
+  /* ---------- Accordion ---------- */
+  var items = document.querySelectorAll('#accordion .acc-item');
+
+  function setHeight(item, open){
+    var body = item.querySelector('.acc-body');
+    if (open){
+      item.classList.add('open');
+      body.style.maxHeight = body.scrollHeight + 'px';
+    } else {
+      item.classList.remove('open');
+      body.style.maxHeight = 0;
+    }
+  }
+
+  items.forEach(function(item){
+    var header = item.querySelector('[data-toggle]');
+    header.addEventListener('click', function(){
+      var isOpen = item.classList.contains('open');
+      items.forEach(function(other){ setHeight(other, false); });
+
+      if (!isOpen){
+        setHeight(item, true);
+
+        // The canvas has no size until its panel is open, so build the
+        // chart on first reveal and then re-measure the panel height.
+        if (item.querySelector('#pieChart')){
+          initPieChart();
+          requestAnimationFrame(function(){
+            setHeight(item, true);
+            if (pieChart) pieChart.resize();
+          });
+        }
+      }
+    });
+  });
+
+  window.addEventListener('load', function(){
+    setHeight(items[0], true);
+  });
+
+  window.addEventListener('resize', function(){
+    items.forEach(function(item){
+      if (item.classList.contains('open')) setHeight(item, true);
+    });
+  });
+</script>
+
+</body>
+</html>
